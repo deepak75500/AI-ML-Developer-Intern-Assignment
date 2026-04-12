@@ -276,3 +276,7 @@ FastAPI  (main.py)
 | Security | SELECT-only enforcement + keyword blocklist |
 
 ---
+
+## 📊 Results
+
+👉 [View Results](./results.md)
