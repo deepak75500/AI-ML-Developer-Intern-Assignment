@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clinic AI — Natural Language SQL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist@2.27.1/plotly.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:          #0c0f14;
+    --bg2:         #12161d;
+    --bg3:         #1a1f2b;
+    --bg4:         #232938;
+    --border:      rgba(255,255,255,0.07);
+    --border-hi:   rgba(255,255,255,0.14);
+    --text:        #e8eaf0;
+    --muted:       #7a8099;
+    --accent:      #4f8ef7;
+    --accent-dim:  rgba(79,142,247,0.12);
+    --accent-glow: rgba(79,142,247,0.25);
+    --green:       #3ecf8e;
+    --green-dim:   rgba(62,207,142,0.12);
+    --amber:       #f5c842;
+    --amber-dim:   rgba(245,200,66,0.12);
+    --red:         #f16060;
+    --red-dim:     rgba(241,96,96,0.12);
+    --radius:      10px;
+    --radius-lg:   16px;
+    --sans:        'Plus Jakarta Sans', system-ui, sans-serif;
+    --mono:        'DM Mono', monospace;
+    --serif:       'DM Serif Display', serif;
+    --sidebar-w:   280px;
+    --top-h:       56px;
+  }
+
+  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; }
+
+  /* ── Layout ─────────────────────────────────────────── */
+  #root { display: flex; height: 100vh; }
+
+  #sidebar {
+    width: var(--sidebar-w);
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  #main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ─────────────────────────────────────────── */
+  .sidebar-header {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo {
+    font-family: var(--serif);
+    font-size: 20px;
+    color: var(--text);
+    letter-spacing: -0.3px;
+  }
+  .logo span { color: var(--accent); }
+  .logo-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .section-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    padding: 16px 20px 8px;
+  }
+
+  .suggestion-btn {
+    display: block;
+    width: calc(100% - 24px);
+    margin: 0 12px 4px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 9px 12px;
+    color: var(--muted);
+    font-size: 12px;
+    font-family: var(--sans);
+    text-align: left;
+    cursor: pointer;
+    line-height: 1.4;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .suggestion-btn:hover {
+    background: var(--bg3);
+    border-color: var(--border-hi);
+    color: var(--text);
+  }
+  .suggestion-btn .sq-icon { color: var(--accent); margin-right: 6px; font-size: 11px; }
+
+  .sidebar-scroll { flex: 1; overflow-y: auto; }
+  .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+  .sidebar-scroll::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 99px; }
+
+  /* History list */
+  .hist-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 12px;
+    border-radius: 0;
+    transition: background 0.1s, color 0.1s;
+    line-height: 1.3;
+  }
+  .hist-item:hover { background: var(--bg3); color: var(--text); }
+  .hist-icon { flex-shrink: 0; font-size: 13px; }
+
+  /* Health badge */
+  .health-area {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+  }
+  .health-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot.err { background: var(--red); }
+
+  /* ── Top bar ─────────────────────────────────────────── */
+  #topbar {
+    height: var(--top-h);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .topbar-title {
+    font-family: var(--serif);
+    font-size: 17px;
+    color: var(--text);
+    letter-spacing: -0.2px;
+  }
+  .topbar-pill {
+    font-size: 10px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1px solid rgba(79,142,247,0.3);
+    border-radius: 99px;
+    padding: 3px 10px;
+    letter-spacing: 0.3px;
+  }
+
+  /* ── API Display ─────────────────────────────────────────── */
+  .api-display {
+    font-size: 10px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    font-family: var(--mono);
+    color: var(--accent);
+    word-break: break-all;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: all;
+  }
+  .api-display:hover { background: var(--bg4); border-color: var(--border-hi); }
+  .api-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .api-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 6px;
+    flex-wrap: wrap;
+  }
+  .api-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .api-meta-dot {
+    width: 5px;
+    height: 5px;
+    background: var(--accent);
+    border-radius: 50%;
+  }
+  .spacer { flex: 1; }
+  .clear-btn {
+    font-size: 11px;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px 12px;
+    cursor: pointer;
+    font-family: var(--sans);
+    transition: all 0.15s;
+  }
+  .clear-btn:hover { 
+    border-color: var(--red);
+    color: var(--red);
+    background: rgba(241,96,96,0.08);
+  }
+  .clear-btn:active { transform: scale(0.96); }
+
+  /* ── Chat area ─────────────────────────────────────────── */
+  #chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  #chat-area::-webkit-scrollbar { width: 5px; }
+  #chat-area::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 99px; }
+
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    color: var(--muted);
+    text-align: center;
+    padding: 60px 20px;
+  }
+  .empty-state .big-icon { font-size: 48px; opacity: 0.4; }
+  .empty-state h2 { font-family: var(--serif); font-size: 26px; color: var(--text); font-weight: 400; }
+  .empty-state p { max-width: 340px; line-height: 1.6; }
+
+  /* Messages */
+  .msg-row { display: flex; flex-direction: column; gap: 6px; }
+  .msg-row.user { align-items: flex-end; }
+  .msg-row.bot  { align-items: flex-start; }
+
+  .bubble {
+    max-width: 70%;
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    line-height: 1.6;
+    font-size: 14px;
+  }
+  .msg-row.user .bubble {
+    background: var(--accent);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .msg-row.bot .bubble {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-bottom-left-radius: 4px;
+  }
+
+  /* Result card */
+  .result-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    width: 100%;
+    max-width: 860px;
+  }
+
+  .result-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg3);
+  }
+  .tab-btn {
+    padding: 10px 18px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 12px;
+    font-family: var(--sans);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    letter-spacing: 0.2px;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; max-height: 320px; overflow-y: auto; }
+  .table-wrap::-webkit-scrollbar { height: 4px; width: 4px; }
+  .table-wrap::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 99px; }
+
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.data-table th {
+    background: var(--bg3);
+    color: var(--muted);
+    padding: 9px 14px;
+    text-align: left;
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  table.data-table td {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  table.data-table tr:last-child td { border-bottom: none; }
+  table.data-table tr:hover td { background: var(--bg3); }
+
+  /* SQL panel */
+  .sql-panel { padding: 16px; }
+  .sql-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  pre.sql-code {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.6;
+  }
+
+  /* Chart panel */
+  .chart-panel { padding: 12px; }
+  .plotly-wrap { width: 100%; min-height: 300px; }
+
+  /* Meta row */
+  .result-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--bg3);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .meta-badge {
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+  }
+  .badge-green { background: var(--green-dim); color: var(--green); }
+  .badge-amber { background: var(--amber-dim); color: var(--amber); }
+  .badge-red   { background: var(--red-dim);   color: var(--red);   }
+  .badge-blue  { background: var(--accent-dim); color: var(--accent); }
+
+  /* Typing indicator */
+  .typing-dots { display: flex; gap: 4px; align-items: center; padding: 4px 0; }
+  .typing-dots span {
+    width: 6px; height: 6px; background: var(--muted);
+    border-radius: 50%; animation: bounce 1.2s infinite;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+    40%           { transform: translateY(-6px); opacity: 1; }
+  }
+
+  /* Error bubble */
+  .error-bubble {
+    background: var(--red-dim);
+    border: 1px solid rgba(241,96,96,0.25);
+    color: var(--red);
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    font-size: 13px;
+    max-width: 70%;
+  }
+
+  /* ── Input area ─────────────────────────────────────────── */
+  #input-area {
+    padding: 16px 32px 24px;
+    flex-shrink: 0;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 10px 12px 10px 16px;
+    transition: border-color 0.15s;
+  }
+  .input-row:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+  #question-input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-size: 14px;
+    font-family: var(--sans);
+    resize: none;
+    min-height: 24px;
+    max-height: 120px;
+    line-height: 1.5;
+    padding: 0;
+  }
+  #question-input::placeholder { color: var(--muted); }
+  #send-btn {
+    width: 36px; height: 36px;
+    border-radius: 9px;
+    background: var(--accent);
+    border: none;
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s, transform 0.1s;
+  }
+  #send-btn:hover { background: #3a7de0; }
+  #send-btn:active { transform: scale(0.94); }
+  #send-btn:disabled { background: var(--bg4); color: var(--muted); cursor: not-allowed; transform: none; }
+  .input-hint { font-size: 11px; color: var(--muted); margin-top: 8px; text-align: center; }
+
+  /* ── Animations ─────────────────────────────────────────── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .fade-up { animation: fadeUp 0.3s ease forwards; }
+
+  /* ── Responsive ─────────────────────────────────────────── */
+  @media (max-width: 720px) {
+    #sidebar { display: none; }
+    #chat-area { padding: 16px; }
+    #input-area { padding: 12px 16px 20px; }
+    .bubble { max-width: 90%; }
+    .result-card { max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div id="root">
+
+  <!-- ── Sidebar ── -->
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">Clinic<span>AI</span></div>
+      <div class="logo-sub">NL → SQL Interface</div>
+    </div>
+
+    <div class="sidebar-scroll">
+      <div class="section-label">Quick Queries</div>
+
+      <button class="suggestion-btn" onclick="fillQ('How many patients do we have?')">
+        <span class="sq-icon">◆</span>How many patients do we have?
+      </button>
+      <button class="suggestion-btn" onclick="fillQ('Which doctor has the most appointments?')">
+        <span class="sq-icon">◆</span>Which doctor has the most appointments?
+      </button>
+      <button class="suggestion-btn" onclick="fillQ('Show me total revenue by month')">
+        <span class="sq-icon">◆</span>Show me total revenue by month
+      </button>
+      <button class="suggestion-btn" onclick="fillQ('Top 5 patients by total spending')">
+        <span class="sq-icon">◆</span>Top 5 patients by total spending
+      </button>
+      <button class="suggestion-btn" onclick="fillQ('Show all unpaid and overdue invoices')">
+        <span class="sq-icon">◆</span>Show all unpaid and overdue invoices
+      </button>
+      <button class="suggestion-btn" onclick="fillQ('Average treatment cost by specialization')">
+        <span class="sq-icon">◆</span>Avg treatment cost by specialization
+      </button>
+      <button class="suggestion-btn" onclick="fillQ('List patients who visited more than 3 times')">
+        <span class="sq-icon">◆</span>Patients with more than 3 visits
+      </button>
+      <button class="suggestion-btn" onclick="fillQ('What percentage of appointments are no-shows?')">
+        <span class="sq-icon">◆</span>No-show percentage
+      </button>
+      <button class="suggestion-btn" onclick="fillQ('Compare revenue between departments')">
+        <span class="sq-icon">◆</span>Revenue by department
+      </button>
+      <button class="suggestion-btn" onclick="fillQ('Show monthly appointment trend for past 6 months')">
+        <span class="sq-icon">◆</span>Monthly appointment trend
+      </button>
+
+      <div class="section-label" style="margin-top:8px;">History</div>
+      <div id="history-list"></div>
+      <button class="suggestion-btn" onclick="if(confirm('Clear all history?')) { history=[]; renderHistory(); saveHistory(); }" style="margin: 8px 12px 0; color: var(--red); border-color: rgba(241,96,96,0.3); background: rgba(241,96,96,0.08);">
+        <span class="sq-icon">✕</span>Clear History
+      </button>
+    </div>
+
+    <div class="health-area">
+      <div class="health-row">
+        <div class="dot" id="health-dot"></div>
+        <span id="health-text">Checking API…</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <div id="main">
+
+    <div id="topbar">
+      <div class="topbar-title">Query Console</div>
+      <div class="topbar-pill" id="api-indicator" title="API Endpoint">API: http://localhost:8002</div>
+      <div class="spacer"></div>
+      <div class="topbar-pill" id="msg-count" style="background: var(--bg3); border-color: var(--border);" title="Messages in conversation"></div>
+      <button class="clear-btn" onclick="clearChat()" title="Clear all chat messages and history (Ctrl+K)">🗑️ Clear chat</button>
+    </div>
+
+    <div id="chat-area">
+      <div class="empty-state" id="empty-state">
+        <div class="big-icon">🏥</div>
+        <h2>Ask the clinic database anything</h2>
+        <p>Type a question in plain English. The AI will convert it to SQL and show you live results, charts, and the generated query.</p>
+      </div>
+    </div>
+
+    <div id="input-area">
+      <div class="input-row">
+        <textarea
+          id="question-input"
+          placeholder="Ask anything about patients, appointments, revenue…"
+          rows="1"
+          maxlength="500"
+        ></textarea>
+        <button id="send-btn" onclick="sendQuestion()" title="Send">&#9658;</button>
+      </div>
+      <div class="input-hint">Press Enter to send · Shift+Enter for new line · Max 500 chars</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const API_BASE = 'http://localhost:8002';
+let history = [];
+let isLoading = false;
+let chatMessages = [];  // Store complete conversation
+
+const STORAGE_KEY_HISTORY = 'clinic_ai_history';
+const STORAGE_KEY_MESSAGES = 'clinic_ai_messages';
+
+// ── localStorage Persistence ──────────────────────────────────────────
+function saveHistory() {
+  try {
+    localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(history));
+  } catch (e) {
+    console.warn('Failed to save history:', e);
+  }
+}
+
+function loadHistory() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_HISTORY);
+    if (saved) {
+      history = JSON.parse(saved);
+      renderHistory();
+    }
+  } catch (e) {
+    console.warn('Failed to load history:', e);
+  }
+}
+
+function saveMessages() {
+  try {
+    localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(chatMessages));
+    updateMessageCount();
+  } catch (e) {
+    console.warn('Failed to save messages:', e);
+  }
+}
+
+function loadMessages() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_MESSAGES);
+    if (saved) {
+      chatMessages = JSON.parse(saved);
+      if (chatMessages.length > 0) {
+        renderSavedChat();
+      }
+    }
+    updateMessageCount();
+  } catch (e) {
+    console.warn('Failed to load messages:', e);
+  }
+}
+
+function clearAllStorage() {
+  localStorage.removeItem(STORAGE_KEY_HISTORY);
+  localStorage.removeItem(STORAGE_KEY_MESSAGES);
+  history = [];
+  chatMessages = [];
+  renderHistory();
+  updateMessageCount();
+}
+
+function updateMessageCount() {
+  const count = chatMessages.length;
+  const badge = document.getElementById('msg-count');
+  if (badge) {
+    if (count === 0) {
+      badge.textContent = 'Ready';
+      badge.style.color = 'var(--muted)';
+    } else {
+      badge.textContent = `${count} msg${count !== 1 ? 's' : ''}`;
+      badge.style.color = 'var(--accent)';
+    }
+  }
+}
+
+// ── Initialize on page load ───────────────────────────────────────────
+window.addEventListener('load', () => {
+  loadHistory();
+  loadMessages();
+});
+
+// ── Keyboard Shortcuts ─────────────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  // Ctrl+K to clear chat
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    clearChat();
+  }
+});
+
+// ── Health check ───────────────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch(`${API_BASE}/health`);
+    const d = await r.json();
+    const dot = document.getElementById('health-dot');
+    const txt = document.getElementById('health-text');
+    if (d.status === 'ok' && d.database === 'connected') {
+      dot.classList.add('ok');
+      txt.textContent = `DB connected · ${d.agent_memory_items} memory items`;
+    } else {
+      dot.classList.add('err');
+      txt.textContent = 'API error';
+    }
+  } catch {
+    document.getElementById('health-dot').classList.add('err');
+    document.getElementById('health-text').textContent = 'API unreachable';
+  }
+}
+checkHealth();
+setInterval(checkHealth, 30000);
+
+// ── Auto-resize textarea ───────────────────────────────────────────────
+const inp = document.getElementById('question-input');
+inp.addEventListener('input', () => {
+  inp.style.height = 'auto';
+  inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
+});
+inp.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
+});
+
+function fillQ(q) {
+  inp.value = q;
+  inp.dispatchEvent(new Event('input'));
+  inp.focus();
+}
+
+// ── Chat helpers ───────────────────────────────────────────────────────
+const chatArea = document.getElementById('chat-area');
+
+function hideEmpty() {
+  const e = document.getElementById('empty-state');
+  if (e) e.style.display = 'none';
+}
+
+function addUserMsg(text) {
+  hideEmpty();
+  const row = document.createElement('div');
+  row.className = 'msg-row user fade-up';
+  row.innerHTML = `<div class="bubble">${escHtml(text)}</div>`;
+  chatArea.appendChild(row);
+  
+  // Store in chatMessages
+  chatMessages.push({
+    type: 'user',
+    text: text,
+    timestamp: new Date().toISOString()
+  });
+  saveMessages();
+  scrollBottom();
+}
+
+function addTyping() {
+  const row = document.createElement('div');
+  row.className = 'msg-row bot fade-up';
+  row.id = 'typing-row';
+  row.innerHTML = `<div class="bubble"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+  chatArea.appendChild(row);
+  scrollBottom();
+}
+
+function removeTyping() {
+  const t = document.getElementById('typing-row');
+  if (t) t.remove();
+}
+
+function addError(msg) {
+  const row = document.createElement('div');
+  row.className = 'msg-row bot fade-up';
+  row.innerHTML = `<div class="error-bubble">⚠ ${escHtml(msg)}</div>`;
+  chatArea.appendChild(row);
+  
+  // Store in chatMessages
+  chatMessages.push({
+    type: 'error',
+    message: msg,
+    timestamp: new Date().toISOString()
+  });
+  saveMessages();
+  scrollBottom();
+}
+
+function addResult(data) {
+  const row = document.createElement('div');
+  row.className = 'msg-row bot fade-up';
+
+  // Status badge
+  let badge = '';
+  if (data.row_count > 0) badge = `<span class="meta-badge badge-green">✓ ${data.row_count} row${data.row_count !== 1 ? 's' : ''}</span>`;
+  else badge = `<span class="meta-badge badge-amber">No data</span>`;
+  if (data.cached) badge += ` <span class="meta-badge badge-blue">⚡ cached</span>`;
+
+  // Build tabs
+  const hasSql   = !!data.sql_query;
+  const hasTable = data.columns && data.columns.length > 0 && data.rows && data.rows.length > 0;
+  const hasChart = !!data.chart;
+
+  const uid = 'res' + Date.now();
+
+  let tabHtml = '';
+  let panelHtml = '';
+  let firstActive = '';
+
+  if (hasTable) {
+    firstActive = firstActive || 'table';
+    tabHtml += `<button class="tab-btn" data-uid="${uid}" data-tab="table" onclick="switchTab('${uid}','table')">Table</button>`;
+    const headers = data.columns.map(c => `<th>${escHtml(c)}</th>`).join('');
+    const bodyRows = data.rows.map(r =>
+      `<tr>${r.map(v => `<td>${v === null ? '<span style="color:var(--muted)">NULL</span>' : escHtml(String(v))}</td>`).join('')}</tr>`
+    ).join('');
+    panelHtml += `<div class="tab-panel" id="${uid}-table"><div class="table-wrap"><table class="data-table"><thead><tr>${headers}</tr></thead><tbody>${bodyRows}</tbody></table></div></div>`;
+  }
+
+  if (hasChart) {
+    firstActive = firstActive || 'chart';
+    tabHtml += `<button class="tab-btn" data-uid="${uid}" data-tab="chart" onclick="switchTab('${uid}','chart')">Chart</button>`;
+    panelHtml += `<div class="tab-panel" id="${uid}-chart"><div class="chart-panel"><div class="plotly-wrap" id="${uid}-plotly"></div></div></div>`;
+  }
+
+  if (hasSql) {
+    firstActive = firstActive || 'sql';
+    tabHtml += `<button class="tab-btn" data-uid="${uid}" data-tab="sql" onclick="switchTab('${uid}','sql')">SQL</button>`;
+    panelHtml += `<div class="tab-panel" id="${uid}-sql"><div class="sql-panel"><div class="sql-label">Generated Query</div><pre class="sql-code">${escHtml(data.sql_query)}</pre></div></div>`;
+  }
+
+  // Add API tab
+  tabHtml += `<button class="tab-btn" data-uid="${uid}" data-tab="api" onclick="switchTab('${uid}','api')">API</button>`;
+  const apiTime = data._responseTime ? data._responseTime.toFixed(2) : '—';
+  const apiStatus = data.cached ? 'CACHED' : 'LIVE';
+  panelHtml += `
+    <div class="tab-panel" id="${uid}-api">
+      <div class="sql-panel">
+        <div class="sql-label">API Endpoint</div>
+        <div class="api-display" title="Click to select all">${API_BASE}/chat</div>
+        
+        <div class="sql-label" style="margin-top:12px;">Request Body</div>
+        <pre class="sql-code">${escHtml(JSON.stringify({ question: data._question }, null, 2))}</pre>
+        
+        <div class="api-meta">
+          <div class="api-meta-item"><div class="api-meta-dot"></div>Status: <strong>${apiStatus}</strong></div>
+          <div class="api-meta-item"><div class="api-meta-dot"></div>Response Time: <strong>${apiTime}ms</strong></div>
+          <div class="api-meta-item"><div class="api-meta-dot"></div>Rows Returned: <strong>${data.row_count}</strong></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  row.innerHTML = `
+    <div class="bubble" style="max-width:90%;padding:10px 14px;margin-bottom:6px;">${escHtml(data.message)}</div>
+    <div class="result-card">
+      <div class="result-tabs">${tabHtml}</div>
+      ${panelHtml}
+      <div class="result-meta">${badge}<span style="margin-left:auto;font-size:10px;">${new Date().toLocaleTimeString()}</span></div>
+    </div>
+  `;
+  chatArea.appendChild(row);
+  scrollBottom();
+
+  // Activate first tab
+  if (firstActive) switchTab(uid, firstActive);
+
+  // Render Plotly chart
+  if (hasChart) {
+    try {
+      const layout = Object.assign({}, data.chart.layout || {}, {
+        paper_bgcolor: 'transparent',
+        plot_bgcolor: 'transparent',
+        font: { color: '#e8eaf0', family: 'Plus Jakarta Sans, sans-serif', size: 11 },
+        margin: { t: 30, r: 16, b: 50, l: 50 },
+        xaxis: Object.assign({ gridcolor: 'rgba(255,255,255,0.06)', zerolinecolor: 'rgba(255,255,255,0.1)' }, (data.chart.layout || {}).xaxis),
+        yaxis: Object.assign({ gridcolor: 'rgba(255,255,255,0.06)', zerolinecolor: 'rgba(255,255,255,0.1)' }, (data.chart.layout || {}).yaxis),
+      });
+      Plotly.newPlot(`${uid}-plotly`, data.chart.data || [], layout, { responsive: true, displayModeBar: false });
+    } catch(e) { console.warn('Plotly render error', e); }
+  }
+
+  // Store in chatMessages (without chart to keep size manageable)
+  chatMessages.push({
+    type: 'result',
+    data: {
+      message: data.message,
+      sql_query: data.sql_query,
+      columns: data.columns,
+      rows: data.rows,
+      row_count: data.row_count,
+      chart: data.chart,
+      chart_type: data.chart_type,
+      cached: data.cached,
+      _responseTime: data._responseTime,
+      _question: data._question
+    },
+    timestamp: new Date().toISOString()
+  });
+  saveMessages();
+}
+
+function switchTab(uid, tab) {
+  // Deactivate all for this uid
+  document.querySelectorAll(`[data-uid="${uid}"]`).forEach(b => b.classList.remove('active'));
+  document.querySelectorAll(`[id^="${uid}-"]`).forEach(p => {
+    if (p.classList.contains('tab-panel')) p.classList.remove('active');
+  });
+  // Activate chosen
+  const btn = document.querySelector(`[data-uid="${uid}"][data-tab="${tab}"]`);
+  if (btn) btn.classList.add('active');
+  const panel = document.getElementById(`${uid}-${tab}`);
+  if (panel) panel.classList.add('active');
+}
+
+function scrollBottom() {
+  chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Send ───────────────────────────────────────────────────────────────
+async function sendQuestion() {
+  const q = inp.value.trim();
+  if (!q || isLoading) return;
+
+  isLoading = true;
+  document.getElementById('send-btn').disabled = true;
+  inp.value = '';
+  inp.style.height = 'auto';
+
+  addUserMsg(q);
+  addTyping();
+
+  // Save to history
+  history.unshift(q);
+  renderHistory();  // This now saves automatically
+
+  const startTime = performance.now();
+
+  try {
+    const res = await fetch(`${API_BASE}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q }),
+    });
+
+    const responseTime = performance.now() - startTime;
+
+    removeTyping();
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Server error' }));
+      
+      // Handle FastAPI validation errors (422)
+      let errorMsg = '';
+      if (err.detail && Array.isArray(err.detail)) {
+        // FastAPI validation error - extract first error message
+        errorMsg = err.detail[0]?.msg || 'Validation error';
+      } else if (err.detail) {
+        errorMsg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+      } else {
+        errorMsg = `HTTP ${res.status} Error`;
+      }
+      addError(errorMsg);
+    } else {
+      const data = await res.json();
+      data._responseTime = responseTime;
+      data._question = q;
+      addResult(data);
+    }
+  } catch (e) {
+    removeTyping();
+    addError('Could not reach the API. Make sure the server is running on port 8002.');
+  }
+
+  isLoading = false;
+  document.getElementById('send-btn').disabled = false;
+  inp.focus();
+}
+
+// ── History ────────────────────────────────────────────────────────────
+function renderHistory() {
+  const list = document.getElementById('history-list');
+  list.innerHTML = history.slice(0, 12).map(q =>
+    `<div class="hist-item" onclick="fillQ(${JSON.stringify(q)})">
+       <span class="hist-icon">↺</span>
+       <span>${escHtml(q.length > 48 ? q.slice(0, 48) + '…' : q)}</span>
+     </div>`
+  ).join('');
+  saveHistory();
+}
+
+function renderSavedChat() {
+  // Restore chat messages from storage
+  for (const msg of chatMessages) {
+    if (msg.type === 'user') {
+      const row = document.createElement('div');
+      row.className = 'msg-row user';
+      row.innerHTML = `<div class="bubble">${escHtml(msg.text)}</div>`;
+      chatArea.appendChild(row);
+    } else if (msg.type === 'error') {
+      const row = document.createElement('div');
+      row.className = 'msg-row bot';
+      row.innerHTML = `<div class="error-bubble">⚠ ${escHtml(msg.message)}</div>`;
+      chatArea.appendChild(row);
+    } else if (msg.type === 'result') {
+      addResultDirect(msg.data);
+    }
+  }
+  scrollBottom();
+}
+
+// Render result without saving to storage (used for restoring from storage)
+function addResultDirect(data) {
+  const row = document.createElement('div');
+  row.className = 'msg-row bot';
+
+  // Status badge
+  let badge = '';
+  if (data.row_count > 0) badge = `<span class="meta-badge badge-green">✓ ${data.row_count} row${data.row_count !== 1 ? 's' : ''}</span>`;
+  else badge = `<span class="meta-badge badge-amber">No data</span>`;
+  if (data.cached) badge += ` <span class="meta-badge badge-blue">⚡ cached</span>`;
+
+  const hasSql   = !!data.sql_query;
+  const hasTable = data.columns && data.columns.length > 0 && data.rows && data.rows.length > 0;
+  const hasChart = !!data.chart;
+
+  const uid = 'res' + Math.random().toString(36).substr(2, 9);
+
+  let tabHtml = '';
+  let panelHtml = '';
+  let firstActive = '';
+
+  if (hasTable) {
+    firstActive = firstActive || 'table';
+    tabHtml += `<button class="tab-btn" data-uid="${uid}" data-tab="table" onclick="switchTab('${uid}','table')">Table</button>`;
+    const headers = data.columns.map(c => `<th>${escHtml(c)}</th>`).join('');
+    const bodyRows = data.rows.map(r =>
+      `<tr>${r.map(v => `<td>${v === null ? '<span style="color:var(--muted)">NULL</span>' : escHtml(String(v))}</td>`).join('')}</tr>`
+    ).join('');
+    panelHtml += `<div class="tab-panel" id="${uid}-table"><div class="table-wrap"><table class="data-table"><thead><tr>${headers}</tr></thead><tbody>${bodyRows}</tbody></table></div></div>`;
+  }
+
+  if (hasChart) {
+    firstActive = firstActive || 'chart';
+    tabHtml += `<button class="tab-btn" data-uid="${uid}" data-tab="chart" onclick="switchTab('${uid}','chart')">Chart</button>`;
+    panelHtml += `<div class="tab-panel" id="${uid}-chart"><div class="chart-panel"><div class="plotly-wrap" id="${uid}-plotly"></div></div></div>`;
+  }
+
+  if (hasSql) {
+    firstActive = firstActive || 'sql';
+    tabHtml += `<button class="tab-btn" data-uid="${uid}" data-tab="sql" onclick="switchTab('${uid}','sql')">SQL</button>`;
+    panelHtml += `<div class="tab-panel" id="${uid}-sql"><div class="sql-panel"><div class="sql-label">Generated Query</div><pre class="sql-code">${escHtml(data.sql_query)}</pre></div></div>`;
+  }
+
+  tabHtml += `<button class="tab-btn" data-uid="${uid}" data-tab="api" onclick="switchTab('${uid}','api')">API</button>`;
+  const apiTime = data._responseTime ? data._responseTime.toFixed(2) : '—';
+  const apiStatus = data.cached ? 'CACHED' : 'LIVE';
+  panelHtml += `
+    <div class="tab-panel" id="${uid}-api">
+      <div class="sql-panel">
+        <div class="sql-label">API Endpoint</div>
+        <div class="api-display" title="Click to select all">${API_BASE}/chat</div>
+        <div class="sql-label" style="margin-top:12px;">Request Body</div>
+        <pre class="sql-code">${escHtml(JSON.stringify({ question: data._question }, null, 2))}</pre>
+        <div class="api-meta">
+          <div class="api-meta-item"><div class="api-meta-dot"></div>Status: <strong>${apiStatus}</strong></div>
+          <div class="api-meta-item"><div class="api-meta-dot"></div>Response Time: <strong>${apiTime}ms</strong></div>
+          <div class="api-meta-item"><div class="api-meta-dot"></div>Rows Returned: <strong>${data.row_count}</strong></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  row.innerHTML = `
+    <div class="bubble" style="max-width:90%;padding:10px 14px;margin-bottom:6px;">${escHtml(data.message)}</div>
+    <div class="result-card">
+      <div class="result-tabs">${tabHtml}</div>
+      ${panelHtml}
+      <div class="result-meta">${badge}<span style="margin-left:auto;font-size:10px;">${new Date().toLocaleTimeString()}</span></div>
+    </div>
+  `;
+  chatArea.appendChild(row);
+
+  if (firstActive) switchTab(uid, firstActive);
+
+  if (hasChart) {
+    try {
+      const layout = Object.assign({}, data.chart.layout || {}, {
+        paper_bgcolor: 'transparent',
+        plot_bgcolor: 'transparent',
+        font: { color: '#e8eaf0', family: 'Plus Jakarta Sans, sans-serif', size: 11 },
+        margin: { t: 30, r: 16, b: 50, l: 50 },
+        xaxis: Object.assign({ gridcolor: 'rgba(255,255,255,0.06)', zerolinecolor: 'rgba(255,255,255,0.1)' }, (data.chart.layout || {}).xaxis),
+        yaxis: Object.assign({ gridcolor: 'rgba(255,255,255,0.06)', zerolinecolor: 'rgba(255,255,255,0.1)' }, (data.chart.layout || {}).yaxis),
+      });
+      Plotly.newPlot(`${uid}-plotly`, data.chart.data || [], layout, { responsive: true, displayModeBar: false });
+    } catch(e) { console.warn('Plotly render error', e); }
+  }
+}
+
+function clearChat() {
+  if (chatMessages.length === 0) {
+    alert('Chat is already empty!');
+    return;
+  }
+  
+  const confirmed = confirm('🗑️ Clear all chat messages and history? This cannot be undone.');
+  if (!confirmed) return;
+  
+  chatArea.innerHTML = `<div class="empty-state" id="empty-state">
+    <div class="big-icon">🏥</div>
+    <h2>Ask the clinic database anything</h2>
+    <p>Type a question in plain English. The AI will convert it to SQL and show you live results, charts, and the generated query.</p>
+  </div>`;
+  clearAllStorage();
+  console.log('Chat cleared by user at', new Date().toLocaleTimeString());
+}
+</script>
+</body>
+</html>

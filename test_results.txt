@@ -1,0 +1,436 @@
+=== INITIAL HEALTH CHECK ===
+Status: 200
+Response: {'status': 'ok', 'database': 'connected', 'agent_memory_items': 0}
+
+=== Q1: How many patients do we have? ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT COUNT(*) FROM patients;
+MSG    : Found 1 record(s).
+ROWS   : 1
+CACHED : False
+SAMPLE : [
+  [
+    200
+  ]
+]
+
+=== Q2: List all doctors and their specializations ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT name, specialization FROM doctors;
+MSG    : Found 15 record(s).
+ROWS   : 15
+CACHED : False
+SAMPLE : [
+  [
+    "Dr. Arjun Mehta",
+    "Dermatology"
+  ],
+  [
+    "Dr. Priya Nair",
+    "Cardiology"
+  ]
+]
+
+=== Q3: Show me appointments for last month ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT * FROM appointments WHERE appointment_date >= datetime('now','-1 month','start of month') AND appointment_date < datetime('now','start of month');
+MSG    : Found 56 record(s).
+ROWS   : 56
+CACHED : False
+SAMPLE : [
+  [
+    9,
+    28,
+    11,
+    "2026-03-04 16:30:00",
+    "Cancelled",
+    "Routine checkup"
+  ],
+  [
+    10,
+    178,
+    11,
+    "2026-03-11 16:00:00",
+    "Completed",
+    null
+  ]
+]
+
+=== Q4: Which doctor has the most appointments? ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT d.id, d.name, COUNT(a.id) AS appointment_count
+FROM doctors d
+LEFT JOIN appointments a ON d.id = a.doctor_id
+GROUP BY d.id
+ORDER BY appointment_count DESC
+LIMIT 1
+MSG    : Found 1 record(s).
+ROWS   : 1
+CACHED : False
+SAMPLE : [
+  [
+    3,
+    "Dr. Suresh Reddy",
+    56
+  ]
+]
+
+=== Q5: What is the total revenue? ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT SUM(total_amount) AS total_revenue FROM invoices;
+MSG    : Found 1 record(s).
+ROWS   : 1
+CACHED : False
+SAMPLE : [
+  [
+    1201852.5899999999
+  ]
+]
+
+=== Q6: Show revenue by doctor ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT d.id, d.name, SUM(t.cost) AS revenue
+FROM doctors d
+JOIN appointments a ON d.id = a.doctor_id
+JOIN treatments t ON a.id = t.appointment_id
+GROUP BY d.id, d.name
+MSG    : Found 15 record(s).
+ROWS   : 15
+CACHED : False
+SAMPLE : [
+  [
+    1,
+    "Dr. Arjun Mehta",
+    79352.95000000001
+  ],
+  [
+    2,
+    "Dr. Priya Nair",
+    61244.33
+  ]
+]
+
+=== Q7: How many cancelled appointments last quarter? ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : WITH last_quarter AS (
+  SELECT
+    date('now','-3 months','start of month','-((strftime('%m','now')-1)%3) months') AS start_date,
+    date(date('now','-3 months','start of month','-((strftime('%m','now')-1)%3) months'),'+'||3||' months','-1 day') AS end_date
+)
+SELECT COUNT(*) 
+FROM appointments, last_quarter
+WHERE status = 'cancelled'
+  AND date(appointment_date) BETWEEN last_quarter.start_date AND last_quarter.end_date;
+MSG    : ❌ Only SELECT queries are allowed. This interface is read-only for data retrieval only.
+ROWS   : 0
+CACHED : False
+
+=== Q8: Top 5 patients by spending ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT p.id, p.first_name, p.last_name, SUM(i.total_amount) AS total_spent
+FROM patients p
+JOIN invoices i ON p.id = i.patient_id
+GROUP BY p.id, p.first_name, p.last_name
+ORDER BY total_spent DESC
+LIMIT 5
+MSG    : Found 5 record(s).
+ROWS   : 5
+CACHED : False
+SAMPLE : [
+  [
+    23,
+    "Lakshmi",
+    "Reddy",
+    22279.47
+  ],
+  [
+    21,
+    "Dinesh",
+    "Bose",
+    21467.61
+  ]
+]
+
+=== Q9: Average treatment cost by specialization ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT d.specialization, AVG(t.cost) AS average_cost
+FROM treatments t
+JOIN appointments a ON t.appointment_id = a.id
+JOIN doctors d ON a.doctor_id = d.id
+GROUP BY d.specialization
+MSG    : Found 5 record(s).
+ROWS   : 5
+CACHED : False
+SAMPLE : [
+  [
+    "Cardiology",
+    2522.2755555555564
+  ],
+  [
+    "Dermatology",
+    2557.5883950617294
+  ]
+]
+
+=== Q10: Show monthly appointment count for the past 6 months ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT strftime('%Y-%m', appointment_date) AS month, COUNT(*) AS appointment_count FROM appointments WHERE appointment_date >= date('now','-5 months','start of month') GROUP BY month ORDER BY month;
+MSG    : Found 6 record(s).
+ROWS   : 6
+CACHED : False
+SAMPLE : [
+  [
+    "2025-11",
+    41
+  ],
+  [
+    "2025-12",
+    54
+  ]
+]
+
+=== Q11: Which city has the most patients? ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT city
+FROM patients
+GROUP BY city
+ORDER BY COUNT(*) DESC
+LIMIT 1
+MSG    : Found 1 record(s).
+ROWS   : 1
+CACHED : False
+SAMPLE : [
+  [
+    "Chennai"
+  ]
+]
+
+=== Q12: List patients who visited more than 3 times ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT p.id, p.first_name, p.last_name, p.email, p.phone, p.date_of_birth, p.gender, p.city, p.registered_date
+FROM patients p
+WHERE p.id IN (
+    SELECT patient_id
+    FROM appointments
+    GROUP BY patient_id
+    HAVING COUNT(*) > 3
+);
+MSG    : Found 52 record(s).
+ROWS   : 52
+CACHED : False
+SAMPLE : [
+  [
+    9,
+    "Kalpana",
+    "Ghosh",
+    "kalpana.ghosh42@email.com",
+    "+91-7798241608",
+    "1997-03-14",
+    "F",
+    "Ahmedabad",
+    "2025-07-04"
+  ],
+  [
+    12,
+    "Shobha",
+    "Kumar",
+    "shobha.kumar67@email.com",
+    "+91-9161090798",
+    "2009-11-18",
+    "F",
+    "Ahmedabad",
+    "2025-08-17"
+  ]
+]
+
+=== Q13: Show unpaid invoices ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT * FROM invoices WHERE status <> 'Paid' OR paid_amount < total_amount;
+MSG    : Found 132 record(s).
+ROWS   : 132
+CACHED : False
+SAMPLE : [
+  [
+    1,
+    112,
+    "2025-08-12",
+    3650.45,
+    1132.44,
+    "Pending"
+  ],
+  [
+    5,
+    118,
+    "2025-09-01",
+    5169.79,
+    2358.24,
+    "Pending"
+  ]
+]
+
+=== Q14: What percentage of appointments are no-shows? ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT ROUND(100.0 * SUM(CASE WHEN status = 'no-show' THEN 1 ELSE 0 END) / COUNT(*), 2) AS no_show_percentage FROM appointments
+MSG    : Found 1 record(s).
+ROWS   : 1
+CACHED : False
+SAMPLE : [
+  [
+    0.0
+  ]
+]
+
+=== Q15: Show the busiest day of the week for appointments ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT strftime('%w', appointment_date) AS weekday, COUNT(*) AS appointment_count
+FROM appointments
+GROUP BY weekday
+ORDER BY appointment_count DESC
+LIMIT 1
+MSG    : Found 1 record(s).
+ROWS   : 1
+CACHED : False
+SAMPLE : [
+  [
+    "1",
+    86
+  ]
+]
+
+=== Q16: Revenue trend by month ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT strftime('%Y-%m', invoice_date) AS month, SUM(total_amount) AS revenue FROM invoices GROUP BY month ORDER BY month
+MSG    : Found 13 record(s).
+ROWS   : 13
+CACHED : False
+SAMPLE : [
+  [
+    "2025-04",
+    66636.14
+  ],
+  [
+    "2025-05",
+    87962.64000000001
+  ]
+]
+
+=== Q17: Average appointment duration by doctor ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT d.id AS doctor_id, d.name, AVG(tot.duration) AS average_duration_minutes
+FROM doctors d
+JOIN appointments a ON a.doctor_id = d.id
+JOIN (
+    SELECT appointment_id, SUM(duration_minutes) AS duration
+    FROM treatments
+    GROUP BY appointment_id
+) tot ON tot.appointment_id = a.id
+GROUP BY d.id, d.name
+MSG    : Found 15 record(s).
+ROWS   : 15
+CACHED : False
+SAMPLE : [
+  [
+    1,
+    "Dr. Arjun Mehta",
+    62.5
+  ],
+  [
+    2,
+    "Dr. Priya Nair",
+    55.74074074074074
+  ]
+]
+
+=== Q18: List patients with overdue invoices ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT p.id, p.first_name, p.last_name, p.email, p.phone, p.date_of_birth, p.gender, p.city, p.registered_date
+FROM patients p
+JOIN invoices i ON p.id = i.patient_id
+WHERE i.total_amount > i.paid_amount OR i.status = 'overdue';
+MSG    : Found 132 record(s).
+ROWS   : 132
+CACHED : False
+SAMPLE : [
+  [
+    112,
+    "Shobha",
+    "Shah",
+    "shobha.shah50@email.com",
+    "+91-9202617095",
+    "1965-09-05",
+    "F",
+    "Bangalore",
+    "2026-02-14"
+  ],
+  [
+    118,
+    "Meena",
+    "Reddy",
+    "meena.reddy56@email.com",
+    "+91-7997613239",
+    "1975-09-01",
+    "F",
+    "Mumbai",
+    "2025-05-29"
+  ]
+]
+
+=== Q19: Compare revenue between departments ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT d.department, SUM(t.cost) AS revenue
+FROM doctors d
+JOIN appointments a ON d.id = a.doctor_id
+JOIN treatments t ON a.id = t.appointment_id
+GROUP BY d.department
+ORDER BY revenue DESC
+MSG    : Found 5 record(s).
+ROWS   : 5
+CACHED : False
+SAMPLE : [
+  [
+    "Skin & Hair",
+    207164.6600000001
+  ],
+  [
+    "Bone & Joint",
+    178257.38999999993
+  ]
+]
+
+=== Q20: Show patient registration trend by month ===
+[Health] Status: 200
+HTTP   : 200
+SQL    : SELECT strftime('%Y-%m', registered_date) AS month, COUNT(*) AS registrations FROM patients GROUP BY month ORDER BY month
+MSG    : Found 13 record(s).
+ROWS   : 13
+CACHED : False
+SAMPLE : [
+  [
+    "2025-04",
+    5
+  ],
+  [
+    "2025-05",
+    22
+  ]
+]
+
