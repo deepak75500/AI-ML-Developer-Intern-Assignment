@@ -51,8 +51,7 @@ project/
 ### Step 1 — Clone & Install
 
 ```bash
-git clone <your-repo-url>
-cd project
+git clone [<your-repo-url>](https://github.com/deepak75500/AI-ML-Developer-Intern-Assignment.git)
 pip install -r requirements.txt
 ```
 
